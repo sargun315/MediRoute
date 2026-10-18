@@ -1,1 +1,1 @@
-"""Pydantic API schemas are added with the approved API implementations."""
+"""Pydantic request and response schemas."""

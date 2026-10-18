@@ -1,6 +1,6 @@
 # MediRoute backend
 
-FastAPI and SQLAlchemy foundation for the MediRoute healthcare platform. This stage adds relational models and the initial Alembic schema migration. It does not yet implement authentication endpoints, business API routes, or frontend integration. The existing frontend and its clearly labelled demo mode remain unchanged.
+FastAPI backend foundation for the MediRoute healthcare platform. The schema and the first password-based authentication endpoints are implemented. Domain APIs and frontend integration remain future work; the existing frontend and its clearly labelled demo mode are unchanged.
 
 ## Technology and layout
 
@@ -9,6 +9,8 @@ FastAPI and SQLAlchemy foundation for the MediRoute healthcare platform. This st
 - SQLAlchemy 2, PostgreSQL via psycopg
 - Alembic migrations
 - Pytest
+- pwdlib with Argon2 password hashing
+- PyJWT access-token signing and validation
 
 Important folders: `app/core` contains environment-backed settings; `app/db` contains SQLAlchemy base/session, URL safety, and Alembic; `app/models` contains the relational schema; `tests` contains isolated model and safety checks.
 
@@ -85,6 +87,45 @@ The health route only reports process health. PostgreSQL integration tests requi
 
 ## Limitations and deferred controls
 
-There are no authentication or domain endpoints yet. Password hashing, session/token issuance, server-side role/resource authorization, login rate limiting, audit logging, consent rules, retention policy, and request/service validation are deferred. Model relationships alone do not prevent cross-patient access. The exclusion constraints protect appointment overlaps at the PostgreSQL schema level when installed; queue number allocation still needs a transactional row-locking service. Do not use real patient information in tests. Consultations store session metadata only and no media.
+## Authentication and authorization
 
-The reviewed endpoint contract and future FastAPI/PostgreSQL integration are not implemented by this schema stage. Frontend demo services remain the current user-facing data source.
+Implemented endpoints:
+
+- `POST /api/auth/register` accepts `email`, `full_name`, `password` (12–128 characters), and optional `phone`. It normalizes email, creates a patient account and profile, stores only an Argon2 password hash, and returns public account fields. Staff/admin role fields are not accepted; public registration cannot assign admin.
+- `POST /api/auth/login` accepts `email` and `password`, returns a short-lived bearer access token (15 minutes by default), expiry seconds, and public account fields. Unknown email and wrong password share the same 401 response.
+- `GET /api/auth/me` requires an `Authorization: Bearer <token>` header and returns the current active user from the database.
+
+JWTs use HS256 with an allow-listed algorithm, issuer, required claims, expiry, random token ID, and only the user UUID as subject. No email, role, password, or patient details are embedded. Role authorization (`require_roles`) reads the current role from the database rather than trusting token claims. `ensure_owner` provides a 404-style cross-owner check for future private-record routes. No domain resource endpoints exist yet, so these primitives still need to be applied at every future service/API boundary. Supported roles are `patient`, `doctor`, `pharmacy`, `medical_representative`, `admin`, plus legacy `representative` for compatibility. Public registration creates patients only; staff accounts must be provisioned through a future trusted workflow.
+
+Set `APP_SECRET_KEY` to a random value of at least 32 characters. Generate a local development key with:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Put the generated value only in ignored `backend/.env` or a deployment secret manager. `ACCESS_TOKEN_EXPIRE_MINUTES` is restricted to 1–60 and defaults to 15. Do not expose this key through Vite variables. The login endpoint currently has no built-in distributed rate limiter, refresh tokens, token revocation, email verification, password reset, or login audit trail; add these before production. Stateless access tokens remain valid until expiry after logout or account role change, although inactive accounts are rejected on each authenticated request. Production deployments need TLS, edge/app-level rate limiting, secure secret rotation, monitoring, and a carefully designed token/session strategy.
+
+Password hashing uses `pwdlib`'s recommended Argon2 configuration; PyJWT verifies tokens with a fixed algorithm allow-list. Login performs a dummy hash verification for unknown email to reduce obvious timing differences. Request validation responses omit raw submitted values so passwords are not echoed in errors. Database/email records used in tests are fictional.
+
+### Try it in `/docs`
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+# Set APP_SECRET_KEY to a locally generated key and DATABASE_URL to a local database.
+python -m uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000/docs`. Register with a fictional example such as:
+
+```json
+{"email":"demo.patient@example.test","full_name":"Fictional Patient","password":"fictional-demo-password-123"}
+```
+
+Then call `/api/auth/login`, copy `access_token`, select **Authorize** in Swagger UI and enter the bearer token. Call `/api/auth/me`. This flow requires the Stage 4 schema to be applied to your local development database first. Review the configured `DATABASE_URL` before manually running `python -m alembic upgrade head`; no migration is applied by application startup.
+
+## Limitations and deferred controls
+
+Authentication is backend-backed but not production-complete. There are no appointments, QR-token, directory, medical-representative, or admin domain API endpoints yet. Model relationships alone do not prevent cross-patient access; future queries must enforce ownership and role authorization. Role checks in the frontend remain presentation-only. The exclusion constraints protect appointment overlaps at the PostgreSQL schema level when installed; queue allocation still needs a transactional row-locking service. Do not use real patient information in tests. Consultations store session metadata only and no media.
+
+Frontend demo services remain the current user-facing data source; this stage does not change frontend authentication or connect frontend services to these endpoints.

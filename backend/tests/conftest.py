@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.safety import validate_test_database_url
+from app.db.session import get_db
 from app.main import app as fastapi_app
 import app.models  # noqa: F401 - register all tables
 
@@ -30,8 +31,13 @@ def _validated_test_url() -> str:
 @pytest.fixture(scope="session")
 def test_engine():
     url = _validated_test_url()
-    engine = create_engine(url, pool_pre_ping=True)
-    if make_url(url).get_backend_name() == "sqlite":
+    is_sqlite = make_url(url).get_backend_name() == "sqlite"
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False} if is_sqlite else {},
+    )
+    if is_sqlite:
         @event.listens_for(engine, "connect")
         def enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
             cursor = dbapi_connection.cursor()
@@ -76,3 +82,25 @@ def db_session(test_engine):
 @pytest.fixture
 def client():
     return TestClient(fastapi_app)
+
+
+@pytest.fixture
+def auth_secret(monkeypatch):
+    import app.core.security as security
+    from app.core.config import Settings
+
+    settings = Settings(app_secret_key="test-only-secret-value-" + ("x" * 40))
+    monkeypatch.setattr(security, "get_settings", lambda: settings)
+    return settings
+
+
+@pytest.fixture
+def auth_client(client, db_session):
+    def override_db():
+        yield db_session
+
+    fastapi_app.dependency_overrides[get_db] = override_db
+    try:
+        yield client
+    finally:
+        fastapi_app.dependency_overrides.pop(get_db, None)

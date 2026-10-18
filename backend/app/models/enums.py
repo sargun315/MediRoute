@@ -6,6 +6,9 @@ from sqlalchemy import Enum as SAEnum
 class UserRole(str, Enum):
     PATIENT = "patient"
     DOCTOR = "doctor"
+    PHARMACY = "pharmacy"
+    MEDICAL_REPRESENTATIVE = "medical_representative"
+    # Kept for compatibility with pre-auth Stage 4 data and client demos.
     REPRESENTATIVE = "representative"
     ADMIN = "admin"
 

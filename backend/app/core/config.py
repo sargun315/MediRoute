@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://localhost:5432/mediroute"
     test_database_url: str = "sqlite+pysqlite:///:memory:"
     frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    access_token_expire_minutes: int = 15
+
+    @field_validator("access_token_expire_minutes")
+    @classmethod
+    def validate_access_token_expiry(cls, value: int) -> int:
+        if value < 1 or value > 60:
+            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be between 1 and 60.")
+        return value
 
     @field_validator("app_secret_key")
     @classmethod
