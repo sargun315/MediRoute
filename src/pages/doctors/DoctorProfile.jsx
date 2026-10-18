@@ -1,0 +1,10 @@
+import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, CalendarDays, MapPin, Stethoscope } from 'lucide-react'
+import { findDoctor } from '../../services/directoryDemoData.js'
+
+export default function DoctorProfile() {
+  const { id } = useParams()
+  const doctor = findDoctor(id)
+  if (!doctor) return <main className="directory-page"><section className="directory-not-found"><h1>Doctor listing not found</h1><p>This sample profile may have been removed or the link may be incorrect.</p><Link className="button button-primary" to="/doctors"><ArrowLeft size={16}/> Back to doctors</Link></section></main>
+  return <main className="directory-page"><article className="provider-profile"><Link className="back-link" to="/doctors"><ArrowLeft size={16}/> Back to doctors</Link><header className="provider-profile-heading"><span className="profile-provider-icon"><Stethoscope size={25}/></span><div><span className="eyebrow">SAMPLE DOCTOR PROFILE</span><h1>{doctor.name}</h1><p>{doctor.specialization}</p></div></header><p className="directory-demo-note">Fictional sample data for the interface. Credentials and availability have not been verified.</p><dl className="provider-profile-details"><div><dt>Qualification</dt><dd>{doctor.qualification || 'Not provided'}</dd></div><div><dt>Experience</dt><dd>{doctor.experience || 'Not provided'}</dd></div><div><dt>Hospital affiliation</dt><dd>{doctor.hospital || 'Not provided'}</dd></div><div><dt>Location</dt><dd><MapPin size={15}/>{doctor.location || 'Not provided'}</dd></div><div><dt>Consultation fee</dt><dd>{doctor.consultationFee || 'Not provided'} (demo)</dd></div><div><dt>Availability</dt><dd>{doctor.availability || 'Not provided'}</dd></div></dl><div className="provider-profile-actions"><Link className="button button-primary" to={`/appointments/book?doctorId=${encodeURIComponent(doctor.id)}`}><CalendarDays size={17}/> Book appointment</Link><span>Appointment booking may require a patient demo login.</span></div></article></main>
+}
